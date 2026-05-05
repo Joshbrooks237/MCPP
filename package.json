@@ -1,0 +1,26 @@
+{
+  "name": "mcpp",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Deterministic signal engine + multi-AI prompt layer + prediction logger",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "signals": "node runSignals.js",
+    "backtest": "node runBacktest.js",
+    "dashboard:dev": "npm run dev --prefix dashboard",
+    "dashboard:build": "npm run build --prefix dashboard"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "technicalindicators": "^3.1.0",
+    "yahoo-finance2": "^3.14.0"
+  }
+}

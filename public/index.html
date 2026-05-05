@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stock Weather</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: linear-gradient(165deg, #b8e9ff 0%, #ffe8f4 45%, #fff9e6 100%);
+      --card: #ffffff;
+      --text: #2d3436;
+      --accent: #ff9f43;
+      --ok: #55efc4;
+      --warn: #ffeaa7;
+      --hot: #ff7675;
+      --cold: #74b9ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Fredoka", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 1rem;
+      padding-bottom: 3rem;
+    }
+    h1 {
+      font-size: clamp(2rem, 8vw, 3rem);
+      text-align: center;
+      margin: 0.5rem 0 0.25rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .sub {
+      text-align: center;
+      font-size: clamp(1.1rem, 4vw, 1.35rem);
+      opacity: 0.85;
+      margin-bottom: 1.5rem;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+    button {
+      font-family: inherit;
+      font-size: clamp(1.2rem, 4vw, 1.5rem);
+      font-weight: 600;
+      border: none;
+      border-radius: 999px;
+      padding: 0.85rem 1.75rem;
+      cursor: pointer;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.12);
+      transition: transform 0.08s ease, box-shadow 0.08s ease;
+    }
+    button:active {
+      transform: translateY(4px);
+      box-shadow: 0 2px 0 rgba(0,0,0,0.12);
+    }
+    .btn-main {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-quiet {
+      background: #dfe6e9;
+      color: #2d3436;
+      font-size: clamp(1rem, 3vw, 1.2rem);
+      padding: 0.65rem 1.25rem;
+      box-shadow: 0 4px 0 rgba(0,0,0,0.1);
+    }
+    #status {
+      text-align: center;
+      font-size: 1.15rem;
+      min-height: 1.5em;
+      margin-bottom: 1rem;
+    }
+    #cards {
+      display: grid;
+      gap: 1.25rem;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+    .card {
+      background: var(--card);
+      border-radius: 28px;
+      padding: 1.35rem 1.5rem;
+      box-shadow: 0 12px 30px rgba(45, 52, 54, 0.12);
+      border: 4px solid rgba(255,255,255,0.9);
+    }
+    .sym {
+      font-size: clamp(1.8rem, 6vw, 2.4rem);
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+    }
+    .price-row {
+      font-size: clamp(2.2rem, 9vw, 3rem);
+      font-weight: 700;
+      color: #0984e3;
+      margin-bottom: 1rem;
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin: 0.55rem 0;
+      font-size: clamp(1.05rem, 3.8vw, 1.25rem);
+    }
+    .label { opacity: 0.75; }
+    .pill {
+      font-weight: 600;
+      padding: 0.35rem 0.85rem;
+      border-radius: 999px;
+      font-size: 1rem;
+    }
+    .pill-cold { background: var(--cold); color: #fff; }
+    .pill-ok { background: var(--ok); color: #2d3436; }
+    .pill-warm { background: var(--warn); color: #2d3436; }
+    .pill-hot { background: var(--hot); color: #fff; }
+    .bar-wrap {
+      height: 22px;
+      border-radius: 999px;
+      background: #dfe6e9;
+      overflow: hidden;
+      margin-top: 0.35rem;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width 0.4s ease;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 2rem;
+      font-size: 0.95rem;
+      opacity: 0.65;
+    }
+    .footer a { color: inherit; }
+    .analyze-box {
+      max-width: 520px;
+      margin: 1.5rem auto 0;
+      padding: 1rem;
+      background: rgba(255,255,255,0.55);
+      border-radius: 20px;
+      font-size: 0.95rem;
+      display: none;
+    }
+    .analyze-box.show { display: block; }
+    .robot-card {
+      background: rgba(255,255,255,0.92);
+      border-radius: 20px;
+      padding: 1.1rem 1.25rem;
+      margin-bottom: 1rem;
+      border: 3px solid rgba(255,255,255,0.95);
+      box-shadow: 0 8px 24px rgba(45,52,54,0.1);
+    }
+    .robot-card h4 {
+      margin: 0 0 0.5rem;
+      font-size: 1.35rem;
+    }
+    .decision-line {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin: 0.6rem 0;
+      padding: 0.5rem 0.85rem;
+      border-radius: 14px;
+      text-align: center;
+    }
+    .dec-BUY { background: #55efc4; color: #2d3436; }
+    .dec-SELL { background: #ff7675; color: #fff; }
+    .dec-HOLD { background: #dfe6e9; color: #2d3436; }
+    .dec-NO { background: #a29bfe; color: #fff; }
+    .plain-list {
+      margin: 0.35rem 0 0 1.1rem;
+      padding: 0;
+      font-size: 1rem;
+      line-height: 1.45;
+    }
+    .plain-tip {
+      font-size: 0.95rem;
+      opacity: 0.88;
+      margin-top: 0.5rem;
+      line-height: 1.4;
+    }
+    details.analyze-raw { margin-top: 1rem; }
+    details.analyze-raw summary {
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 1rem;
+      margin-bottom: 0.5rem;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.8rem;
+      max-height: 220px;
+      overflow: auto;
+      background: rgba(0,0,0,0.06);
+      padding: 0.75rem;
+      border-radius: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Stock weather</h1>
+  <p class="sub">Big buttons. Easy numbers. Also updates by itself every <strong>30 seconds</strong>.</p>
+
+  <div class="toolbar">
+    <button type="button" class="btn-main" id="refresh">Refresh numbers</button>
+    <button type="button" class="btn-quiet" id="analyze" title="Uses AI (may cost money). Explains in plain English below.">
+      Ask the smart robots
+    </button>
+  </div>
+
+  <p id="status">&nbsp;</p>
+  <div id="cards"></div>
+
+  <div class="analyze-box" id="analyzeOut"></div>
+
+  <p class="footer">
+    Raw JSON for grown-ups:
+    <a href="/signals">/signals</a>
+  </p>
+
+  <script>
+    const cardsEl = document.getElementById("cards");
+    const statusEl = document.getElementById("status");
+
+    function rsiWords(rsi) {
+      if (rsi < 35) return { text: "Nice and chilly", cls: "pill-cold", emoji: "\u2744\uFE0F" };
+      if (rsi > 65) return { text: "Pretty steamy", cls: "pill-hot", emoji: "\uD83D\uDD25" };
+      return { text: "Comfy middle", cls: "pill-ok", emoji: "\u2728" };
+    }
+
+    function bbWords(bb) {
+      if (bb < 0.2) return { text: "Way down low", cls: "pill-cold" };
+      if (bb > 0.8) return { text: "Way up high", cls: "pill-hot" };
+      if (bb < 0.45) return { text: "Below middle", cls: "pill-ok" };
+      if (bb > 0.55) return { text: "Above middle", cls: "pill-warm" };
+      return { text: "Right in the middle", cls: "pill-ok" };
+    }
+
+    function barColor(bb) {
+      if (bb < 0.33) return "#74b9ff";
+      if (bb > 0.67) return "#ff7675";
+      return "#fdcb6e";
+    }
+
+    function render(signals) {
+      cardsEl.innerHTML = signals.map((s) => {
+        const r = rsiWords(s.rsi);
+        const b = bbWords(s.bollinger_position);
+        const pct = Math.round(s.bollinger_position * 100);
+        return `
+          <article class="card">
+            <div class="sym">${s.symbol}</div>
+            <div class="price-row">$${Number(s.price).toFixed(2)}</div>
+            <div class="row">
+              <span class="label">Heat meter (RSI)</span>
+              <span class="pill ${r.cls}">${r.emoji} ${r.text}</span>
+            </div>
+            <div class="row">
+              <span class="label">Rubber band spot</span>
+              <span class="pill ${b.cls}">${b.text}</span>
+            </div>
+            <div class="label" style="margin-top:0.5rem">Where on the band? (${pct}%)</div>
+            <div class="bar-wrap">
+              <div class="bar-fill" style="width:${pct}%;background:${barColor(s.bollinger_position)}"></div>
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    const AUTO_REFRESH_MS = 30 * 1000;
+
+    async function loadSignals(options = {}) {
+      const silent = options.silent === true;
+      if (!silent) {
+        statusEl.textContent = "Loading\u2026";
+        cardsEl.innerHTML = "";
+      } else {
+        statusEl.textContent = "Getting new numbers\u2026";
+      }
+      try {
+        const res = await fetch("/signals");
+        if (!res.ok) throw new Error("Bad response");
+        const data = await res.json();
+        render(data);
+        statusEl.textContent = silent
+          ? "Updated! Next auto-update in 30 seconds. Or tap Refresh anytime."
+          : "Done! Next auto-update in 30 seconds. Tap Refresh anytime if you're impatient.";
+      } catch (e) {
+        statusEl.textContent = silent
+          ? "Could not auto-update — still showing last numbers. Tap Refresh."
+          : "Oops — numbers didn't load. Tap refresh to try again.";
+        if (!silent) {
+          cardsEl.innerHTML =
+            '<div class="card"><div class="sym">Hmm</div><p>Something broke. Is the server running?</p></div>';
+        }
+      }
+    }
+
+    function escapeHtml(s) {
+      if (s == null) return "";
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function shortErr(s) {
+      const t = String(s).replace(/\s+/g, " ").trim();
+      return t.length > 160 ? t.slice(0, 160) + "\u2026" : t;
+    }
+
+    function decisionClass(d) {
+      if (d === "BUY") return "dec-BUY";
+      if (d === "SELL") return "dec-SELL";
+      if (d === "NO TRADE") return "dec-NO";
+      return "dec-HOLD";
+    }
+
+    function renderAnalyzePlain(data) {
+      if (data.error) {
+        return `<p class="plain-tip"><strong>Oops:</strong> ${escapeHtml(data.error)}</p>`;
+      }
+      const rows = (data.results || [])
+        .map((r) => {
+          const sym = escapeHtml(r.signal?.symbol ?? "?");
+          const price = Number(r.signal?.price);
+          const priceStr = Number.isFinite(price) ? price.toFixed(2) : "?";
+
+          let story = "";
+          let decisionHtml = "";
+
+          if (r.newsBlocked) {
+            story =
+              "<p class=\"plain-tip\">There were <strong>recent headlines</strong> about this company. Our rule is to sit out when news is flying around — so we chose <strong>no trading</strong> for now.</p>";
+            decisionHtml = `<div class="decision-line dec-NO">Answer: NO TRADE (news pause)</div>`;
+          } else if (r.aiSkipped && r.aiSkipReason === "rsi_bb_gate") {
+            story =
+              "<p class=\"plain-tip\">We skipped the paid robots because this stock wasn&rsquo;t showing wild swings — like skipping fireworks when it isn&rsquo;t party time yet. That saves money.</p>" +
+              "<p class=\"plain-tip\">This button is supposed to wake them anyway. If you still see this after <strong>refreshing the page once</strong>, try restarting the server.</p>";
+            decisionHtml = `<div class="decision-line dec-HOLD">Answer: robots stayed quiet (calm market)</div>`;
+          } else if (r.aiSkipped && r.aiSkipReason === "major_news_recent") {
+            story =
+              "<p class=\"plain-tip\">News guard triggered — same idea as headline pause.</p>";
+            decisionHtml = `<div class="decision-line dec-NO">Answer: NO TRADE</div>`;
+          } else if (!r.ok && Object.keys(r.errors || {}).length) {
+            const errs = Object.entries(r.errors)
+              .map(([k, v]) => `<li><strong>${escapeHtml(k)}:</strong> ${escapeHtml(v)}</li>`)
+              .join("");
+            story = `<p class="plain-tip">Not enough robots answered to hold a full vote.</p><ul class="plain-list">${errs}</ul>`;
+            decisionHtml = `<div class="decision-line dec-HOLD">Answer: couldn&rsquo;t finish all votes</div>`;
+          } else {
+            const o = r.openai || {};
+            const c = r.claude || {};
+            const x = r.xai || {};
+            const bits = [];
+
+            if (r.xaiStubbed) {
+              bits.push(
+                "<li><strong>xAI vote:</strong> didn&rsquo;t answer — often a wrong model name in settings. We counted it as &ldquo;nothing looks wildly abnormal&rdquo; so <strong>OpenAI</strong> and <strong>Claude</strong> could still cast their votes. Update <code>XAI_MODEL</code> (try <code>grok-3-latest</code> or <code>grok-4-latest</code>).</li>",
+              );
+              if (r.errors?.xai) {
+                bits.push(
+                  `<li style="list-style:none;margin-left:0;opacity:0.85"><small>${escapeHtml(shortErr(r.errors.xai))}</small></li>`,
+                );
+              }
+            }
+
+            if (o.action)
+              bits.push(
+                `<li><strong>OpenAI vote:</strong> <strong>${escapeHtml(o.action)}</strong>${typeof o.confidence === "number" ? ` (${Math.round(o.confidence * 100)}% confident)` : ""}.</li>`,
+              );
+            if (Array.isArray(o.reasoning) && o.reasoning.length) {
+              bits.push(
+                `<li><strong>OpenAI said:</strong> ${escapeHtml(o.reasoning.slice(0, 3).join(" · "))}</li>`,
+              );
+            }
+            if (c.risk_level)
+              bits.push(
+                `<li><strong>Claude vote:</strong> risk is <strong>${escapeHtml(c.risk_level)}</strong>${Array.isArray(c.issues) && c.issues[0] ? ` — worry example: ${escapeHtml(String(c.issues[0]))}` : ""}.</li>`,
+              );
+            if (!r.xaiStubbed && x.behavior != null)
+              bits.push(
+                `<li><strong>xAI vote:</strong> feels <strong>${escapeHtml(String(x.behavior))}</strong>${x.avoid_trade ? " — suggests skipping a trade." : "."}</li>`,
+              );
+
+            story =
+              bits.length > 0
+                ? `<ul class="plain-list">${bits.join("")}</ul>`
+                : "<p class=\"plain-tip\">Robots answered but didn&rsquo;t send the usual labels. Check raw JSON.</p>";
+            const fd = r.finalDecision ?? "HOLD";
+            decisionHtml = `<div class="decision-line ${decisionClass(fd)}">Final tally: ${escapeHtml(fd)}</div>`;
+          }
+
+          return `
+            <div class="robot-card">
+              <h4>${sym}</h4>
+              <p style="margin:0;font-size:1.1rem">About <strong>$${escapeHtml(priceStr)}</strong> when we asked.</p>
+              ${decisionHtml}
+              ${story}
+            </div>
+          `;
+        })
+        .join("");
+
+      const raw = escapeHtml(JSON.stringify(data, null, 2));
+
+      return `
+        <h3 style="text-align:center;margin:0 0 0.75rem;font-size:1.5rem">What the robots said</h3>
+        ${rows}
+        <details class="analyze-raw">
+          <summary>Raw computer words (for coders)</summary>
+          <pre>${raw}</pre>
+        </details>
+      `;
+    }
+
+    document.getElementById("analyze").addEventListener("click", async () => {
+      const box = document.getElementById("analyzeOut");
+      box.classList.add("show");
+      box.innerHTML = "<p>Robots are thinking\u2026 this can take a minute.</p>";
+      try {
+        const res = await fetch("/analyze?forceAi=1", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ forceAi: true }),
+        });
+        const data = await res.json();
+        box.innerHTML = renderAnalyzePlain(data);
+      } catch (e) {
+        box.innerHTML = "<p>Oops, robots didn't answer.</p>";
+      }
+    });
+
+    loadSignals({ silent: false });
+    setInterval(() => loadSignals({ silent: true }), AUTO_REFRESH_MS);
+  </script>
+</body>
+</html>
