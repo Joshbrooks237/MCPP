@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Area,
   CartesianGrid,
   ComposedChart,
   Legend,
@@ -54,6 +53,8 @@ const TICKER_LINE_COLORS: Record<string, string> = {
 };
 
 const COUNCIL_LINE_SOLID = "#fbbf24";
+/** Detail-mode Yahoo close line (left axis). */
+const TAPE_CLOSE_LINE = "#67e8f9";
 
 function consensusScoreNum(consensus: string): number | null {
   const u = String(consensus).toUpperCase();
@@ -113,8 +114,6 @@ export function CouncilTapeChart({
   decisionLog: TapeDecisionRow[] | undefined;
   tickers: string[];
 }) {
-  const fillGradientId = useId().replace(/:/g, "");
-
   /** Default to universe comparison so you can tune the panel against every tape at once. */
   const [mode, setMode] = useState<ChartMode>("compare");
 
@@ -383,7 +382,7 @@ export function CouncilTapeChart({
           </h2>
           <p className="text-[11px] text-slate-500 mt-1 max-w-xl leading-relaxed">
             {mode === "detail"
-              ? `Yahoo closes (${tape?.interval ?? "—"} bars). Yellow stepped line = blended council verdict through time (BUY / HOLD / SELL), not each model separately.`
+              ? `Yahoo closes (${tape?.interval ?? "—"} bars): cyan line = close price; dashed amber stepped line = blended council verdict through time (BUY / HOLD / SELL), not each model separately.`
               : "Indexed real tape (solid) vs dashed blend per symbol on one clock — scan divergence to tune prompts, weights, or RSI gates across names."}
           </p>
         </div>
@@ -436,7 +435,7 @@ export function CouncilTapeChart({
       <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10px] font-semibold uppercase tracking-wide mb-2 border-b border-slate-800/80 pb-2">
         <span className="flex items-center gap-2 text-slate-400">
           <span
-            className="inline-block h-3 w-8 rounded-sm bg-gradient-to-r from-cyan-400/70 via-fuchsia-500/50 to-pink-500/30 border border-cyan-500/40"
+            className="inline-block w-8 border-t-[3px] border-[#67e8f9]"
             aria-hidden
           />
           Yahoo tape
@@ -492,13 +491,6 @@ export function CouncilTapeChart({
               data={detailChartRows}
               margin={{ top: 12, right: 36, left: -6, bottom: 8 }}
             >
-              <defs>
-                <linearGradient id={fillGradientId} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.55} />
-                  <stop offset="45%" stopColor="#d946ef" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="#ec4899" stopOpacity={0.06} />
-                </linearGradient>
-              </defs>
               <CartesianGrid strokeDasharray="4 6" stroke="#334155" opacity={0.6} />
               <XAxis
                 type="number"
@@ -571,14 +563,15 @@ export function CouncilTapeChart({
                   );
                 }}
               />
-              <Area
+              <Line
                 yAxisId="price"
                 type="linear"
                 dataKey="c"
-                stroke="#67e8f9"
-                strokeWidth={2.2}
-                fill={`url(#${fillGradientId})`}
+                name="Yahoo tape"
+                stroke={TAPE_CLOSE_LINE}
+                strokeWidth={2.5}
                 dot={false}
+                connectNulls={false}
                 isAnimationActive={false}
               />
               <Line
@@ -588,6 +581,7 @@ export function CouncilTapeChart({
                 name="Council blend"
                 stroke={COUNCIL_LINE_SOLID}
                 strokeWidth={2.5}
+                strokeDasharray="6 4"
                 dot={false}
                 connectNulls={false}
                 isAnimationActive={false}
