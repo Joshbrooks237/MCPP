@@ -107,7 +107,7 @@ export function createPaperPortfolio(initialBalance = 10000) {
   };
 }
 
-/** Live demo singleton (paper sim UI — AAPL / TSLA only). */
+/** Live demo singleton (paper sim: two-name universe — equities or crypto). */
 export let portfolio = {
   startingBalance: 0,
   balance: 0,

@@ -1,3 +1,25 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@keyframes cash-up-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55),
+      inset 0 0 60px rgba(16, 185, 129, 0.12);
+    transform: scale(1);
+  }
+  35% {
+    box-shadow: 0 0 32px 8px rgba(52, 211, 153, 0.35),
+      inset 0 0 80px rgba(16, 185, 129, 0.18);
+    transform: scale(1.02);
+  }
+  100% {
+    box-shadow: 0 0 24px rgba(16, 185, 129, 0.2),
+      inset 0 0 40px rgba(16, 185, 129, 0.08);
+    transform: scale(1);
+  }
+}
+
+.paper-cash-hero--tick-up {
+  animation: cash-up-glow 0.85s ease-out;
+}

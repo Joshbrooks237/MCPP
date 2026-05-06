@@ -1,3 +1,4 @@
+import "./cryptoPolyfill.js";
 import "dotenv/config";
 import express from "express";
 import { runEngine, getSignal, SYMBOLS } from "./signalEngine.js";
@@ -15,8 +16,17 @@ import {
   resetPaperSimTickCounter,
   runPaperSimTick,
   getPaperSimStateLive,
+  setPaperSimMarket,
+  getPaperSimMarket,
 } from "./paperSimService.js";
 import { initializePortfolio } from "./paperPortfolio.js";
+import {
+  getStockWeatherState,
+  runCouncilCycle,
+  runHistoryStudy,
+  paperTradeConsensus,
+  startStockWeatherScheduler,
+} from "./stockWeatherService.js";
 
 import path from "path";
 import { fileURLToPath } from "url";
@@ -29,16 +39,20 @@ app.use(express.static(path.join(__dirname, "public")));
 
 const PORT = Number(process.env.PORT) || 3000;
 
+/** Structured JSON errors for API clients (`ok` + `error.name` / `error.message`). */
+function jsonFail(res, status, err) {
+  const message = String(err?.message ?? err);
+  const name = err instanceof Error ? err.name : "Error";
+  res.status(status).json({ ok: false, error: { name, message } });
+}
+
 app.get("/signals", async (req, res) => {
   try {
     const data = await runEngine();
     res.json(data);
   } catch (err) {
     console.error(err);
-    res.status(500).json({
-      error: "Error generating signals",
-      detail: String(err.message ?? err),
-    });
+    jsonFail(res, 500, err);
   }
 });
 
@@ -57,7 +71,7 @@ app.post("/signals/log", async (req, res) => {
     res.json({ logged });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: String(err.message ?? err) });
+    jsonFail(res, 500, err);
   }
 });
 
@@ -74,11 +88,19 @@ function readForceAi(req) {
 
 app.post("/paper-sim/init", (req, res) => {
   try {
+    const m = req.body?.market;
+    if (m === "crypto" || m === "equities") {
+      setPaperSimMarket(m);
+    } else if (m != null && String(m).trim() !== "") {
+      throw new Error('market must be "equities" or "crypto"');
+    } else {
+      setPaperSimMarket("equities");
+    }
     initializePortfolio(req.body?.amount);
     resetPaperSimTickCounter();
-    res.json({ ok: true });
+    res.json({ ok: true, market: getPaperSimMarket() });
   } catch (err) {
-    res.status(400).json({ error: String(err.message ?? err) });
+    jsonFail(res, 400, err);
   }
 });
 
@@ -89,7 +111,7 @@ app.post("/paper-sim/tick", async (req, res) => {
     res.json(out);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: String(err.message ?? err) });
+    jsonFail(res, 500, err);
   }
 });
 
@@ -98,7 +120,47 @@ app.get("/paper-sim/state", async (_req, res) => {
     const out = await getPaperSimStateLive();
     res.json(out);
   } catch (err) {
-    res.status(500).json({ error: String(err.message ?? err) });
+    jsonFail(res, 500, err);
+  }
+});
+
+app.get("/stock-weather/state", (_req, res) => {
+  try {
+    res.json(getStockWeatherState());
+  } catch (err) {
+    jsonFail(res, 500, err);
+  }
+});
+
+app.post("/stock-weather/poll", async (_req, res) => {
+  try {
+    const out = await runCouncilCycle();
+    res.json(out);
+  } catch (err) {
+    jsonFail(res, 500, err);
+  }
+});
+
+app.post("/stock-weather/study", async (req, res) => {
+  try {
+    const ticker = req.body?.ticker;
+    if (!ticker) throw new Error("ticker required");
+    const out = await runHistoryStudy(String(ticker));
+    res.json({ ok: true, study: out });
+  } catch (err) {
+    jsonFail(res, 500, err);
+  }
+});
+
+app.post("/stock-weather/paper-trade", async (req, res) => {
+  try {
+    const ticker = req.body?.ticker;
+    if (!ticker) throw new Error("ticker required");
+    const usd = Number(req.body?.usd) || 50;
+    const out = await paperTradeConsensus(String(ticker), usd);
+    res.json({ ok: true, ...out });
+  } catch (err) {
+    jsonFail(res, 400, err);
   }
 });
 
@@ -107,7 +169,7 @@ app.post("/council/sim/reset", (_req, res) => {
     resetAllPortfolios();
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: String(err.message ?? err) });
+    jsonFail(res, 500, err);
   }
 });
 
@@ -115,7 +177,7 @@ app.get("/council/dashboard", (_req, res) => {
   try {
     res.json(getCouncilDashboardData());
   } catch (err) {
-    res.status(500).json({ error: String(err.message ?? err) });
+    jsonFail(res, 500, err);
   }
 });
 
@@ -129,7 +191,7 @@ app.post("/council/sim/step", async (req, res) => {
     res.json(out);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: String(err.message ?? err) });
+    jsonFail(res, 500, err);
   }
 });
 
@@ -206,7 +268,7 @@ app.post("/analyze", async (req, res) => {
     res.json({ results });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: String(err.message ?? err) });
+    jsonFail(res, 500, err);
   }
 });
 
@@ -214,17 +276,21 @@ app.get("/predictions", async (_req, res) => {
   try {
     res.json(readTrades());
   } catch (err) {
-    res.status(500).json({ error: String(err.message ?? err) });
+    jsonFail(res, 500, err);
   }
 });
 
 app.get("/predictions/:id", async (req, res) => {
   try {
     const row = readTrades().find((r) => r.id === req.params.id);
-    if (!row) return res.status(404).json({ error: "Not found" });
+    if (!row) {
+      return res
+        .status(404)
+        .json({ ok: false, error: { name: "NotFound", message: "Not found" } });
+    }
     res.json(row);
   } catch (err) {
-    res.status(500).json({ error: String(err.message ?? err) });
+    jsonFail(res, 500, err);
   }
 });
 
@@ -233,7 +299,7 @@ app.post("/predictions/process-checkpoints", async (_req, res) => {
     const out = await processDueCheckpoints();
     res.json(out);
   } catch (err) {
-    res.status(500).json({ error: String(err.message ?? err) });
+    jsonFail(res, 500, err);
   }
 });
 
@@ -257,13 +323,16 @@ tickMarketRecorder();
 setInterval(tickMarketRecorder, MARKET_INTERVAL_MS);
 
 app.listen(PORT, () => {
+  startStockWeatherScheduler();
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`GET  /           (easy dashboard)`);
   console.log(`GET  /signals`);
   console.log(`POST /signals/log`);
   console.log(`POST /analyze`);
   console.log(`GET  /predictions`);
-  console.log(`POST /predictions/process-checkpoints`);
+  console.log(`POST /stock-weather/poll`);
+  console.log(`POST /stock-weather/study`);
+  console.log(`POST /stock-weather/paper-trade`);
   console.log(
     `Rolling marketRecorder every ${MARKET_INTERVAL_MS / 60000}m → ./marketData.json (${SYMBOLS.join(", ")})`,
   );

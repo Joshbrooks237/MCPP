@@ -2,7 +2,7 @@
 
 **Multi‑Council Paper Portfolio** — *the revenge of the nerd edition.*
 
-We didn’t come here to lose pocket protectors. We came here to pipe live quotes through a signal stack, let a rotating council of models argue about **AAPL** and **TSLA**, and watch fake money move like it’s rush week for robots.
+We didn’t come here to lose pocket protectors. We came here to pipe live quotes through a signal stack, let a rotating council of models argue about **two names at a time** (equities **AAPL/TSLA** or spot **BTC/ETH** when stocks are closed), and watch fake money move like it’s rush week for robots.
 
 > “Nice portfolio… shame if someone backtested it with feelings.”  
 > — approximately Gilbert Lowell, if he traded synthetic equity curves
@@ -33,13 +33,13 @@ cd dashboard && npm install && npm run dev
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `POST` | `/paper-sim/init` | `{ "amount": 500 }` — seed portfolio |
+| `POST` | `/paper-sim/init` | `{ "amount": 500, "market": "equities" \| "crypto" }` — seed portfolio (`market` optional; default `equities`) |
 | `POST` | `/paper-sim/tick` | advance simulation / council tick |
 | `GET`  | `/paper-sim/state` | snapshot + marks |
 
 ## Stack ethos
 
-Tri‑Lambda rules: **one repo**, **no drama frameworks**, **two symbols for the demo loop** (AAPL + TSLA). The council pipeline stays the star — we’re just the marching band.
+Tri‑Lambda rules: **one repo**, **no drama frameworks**, **two symbols per run** (pick equities or crypto in the UI). Same council pipeline either way — crypto is for nights/weekends when cash equities are quiet.
 
 ---
 

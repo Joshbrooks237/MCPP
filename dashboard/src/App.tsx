@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { AiThinkingStrip } from "./components/AiThinkingStrip";
 import { PaperSim } from "./PaperSim";
+import { StockWeather } from "./StockWeather";
 
 type DemoPattern = "manual" | "all" | "solo" | "random";
-type AppView = "ai-demo" | "paper";
+type AppView = "weather" | "paper" | "ai-demo";
 
 export default function App() {
-  const [view, setView] = useState<AppView>("paper");
+  const [view, setView] = useState<AppView>("weather");
   const [openai, setOpenai] = useState(false);
   const [claude, setClaude] = useState(false);
   const [xai, setXai] = useState(false);
@@ -59,15 +60,26 @@ export default function App() {
   }, [soloTick, demoPattern]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-start gap-6 p-6 pt-12">
-      <div className="flex gap-2">
+    <>
+      <div className="fixed top-3 right-3 z-[100] flex flex-wrap gap-2 justify-end max-w-[calc(100vw-1rem)]">
+        <button
+          type="button"
+          onClick={() => setView("weather")}
+          className={`rounded-lg px-3 py-1.5 text-xs font-semibold shadow-md ${
+            view === "weather"
+              ? "bg-[#ff9f43] text-white"
+              : "bg-white/90 text-slate-700 border border-slate-200"
+          }`}
+        >
+          Stock Weather
+        </button>
         <button
           type="button"
           onClick={() => setView("paper")}
-          className={`rounded-lg px-4 py-2 text-sm font-medium ${
+          className={`rounded-lg px-3 py-1.5 text-xs font-semibold shadow-md ${
             view === "paper"
               ? "bg-emerald-700 text-white"
-              : "bg-slate-800 text-slate-300"
+              : "bg-white/90 text-slate-700 border border-slate-200"
           }`}
         >
           Paper sim
@@ -75,86 +87,93 @@ export default function App() {
         <button
           type="button"
           onClick={() => setView("ai-demo")}
-          className={`rounded-lg px-4 py-2 text-sm font-medium ${
+          className={`rounded-lg px-3 py-1.5 text-xs font-semibold shadow-md ${
             view === "ai-demo"
               ? "bg-indigo-600 text-white"
-              : "bg-slate-800 text-slate-300"
+              : "bg-white/90 text-slate-700 border border-slate-200"
           }`}
         >
           AI strip demo
         </button>
       </div>
 
-      {view === "paper" ? (
-        <PaperSim />
+      {view === "weather" ? (
+        <StockWeather />
       ) : (
-        <>
-          <AiThinkingStrip
-            openaiActive={openai}
-            claudeActive={claude}
-            xaiActive={xai}
-          />
+        <div className="min-h-screen flex flex-col items-center justify-start gap-6 p-6 pt-12 bg-slate-950">
+          <div className="h-8 shrink-0" aria-hidden />
 
-          <div className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-900/80 p-4 space-y-4">
-            <p className="text-slate-400 text-sm text-center">
-              Demo mode cycles: <strong className="text-slate-200">manual</strong>{" "}
-              → <strong className="text-slate-200">all firing</strong> →{" "}
-              <strong className="text-slate-200">one at a time</strong> →{" "}
-              <strong className="text-slate-200">random stagger</strong>
-            </p>
+          {view === "paper" ? (
+            <PaperSim />
+          ) : (
+            <>
+              <AiThinkingStrip
+                openaiActive={openai}
+                claudeActive={claude}
+                xaiActive={xai}
+              />
 
-            <button
-              type="button"
-              onClick={cycleDemo}
-              className="w-full rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 px-4 text-sm transition-colors"
-            >
-              Demo mode:{" "}
-              <span className="uppercase tracking-wide">{demoPattern}</span> —
-              tap to cycle
-            </button>
+              <div className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-900/80 p-4 space-y-4">
+                <p className="text-slate-400 text-sm text-center">
+                  Demo mode cycles:{" "}
+                  <strong className="text-slate-200">manual</strong> →{" "}
+                  <strong className="text-slate-200">all firing</strong> →{" "}
+                  <strong className="text-slate-200">one at a time</strong> →{" "}
+                  <strong className="text-slate-200">random stagger</strong>
+                </p>
 
-            {demoPattern === "manual" && (
-              <div className="flex flex-wrap gap-3 justify-center">
-                <label className="flex items-center gap-2 text-slate-300 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={openai}
-                    onChange={(e) => setOpenai(e.target.checked)}
-                    className="rounded border-slate-600"
-                  />
-                  OpenAI
-                </label>
-                <label className="flex items-center gap-2 text-slate-300 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={claude}
-                    onChange={(e) => setClaude(e.target.checked)}
-                    className="rounded border-slate-600"
-                  />
-                  Claude
-                </label>
-                <label className="flex items-center gap-2 text-slate-300 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={xai}
-                    onChange={(e) => setXai(e.target.checked)}
-                    className="rounded border-slate-600"
-                  />
-                  xAI
-                </label>
+                <button
+                  type="button"
+                  onClick={cycleDemo}
+                  className="w-full rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 px-4 text-sm transition-colors"
+                >
+                  Demo mode:{" "}
+                  <span className="uppercase tracking-wide">{demoPattern}</span>{" "}
+                  — tap to cycle
+                </button>
+
+                {demoPattern === "manual" && (
+                  <div className="flex flex-wrap gap-3 justify-center">
+                    <label className="flex items-center gap-2 text-slate-300 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={openai}
+                        onChange={(e) => setOpenai(e.target.checked)}
+                        className="rounded border-slate-600"
+                      />
+                      OpenAI
+                    </label>
+                    <label className="flex items-center gap-2 text-slate-300 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={claude}
+                        onChange={(e) => setClaude(e.target.checked)}
+                        className="rounded border-slate-600"
+                      />
+                      Claude
+                    </label>
+                    <label className="flex items-center gap-2 text-slate-300 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={xai}
+                        onChange={(e) => setXai(e.target.checked)}
+                        className="rounded border-slate-600"
+                      />
+                      xAI
+                    </label>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          <p className="text-slate-600 text-xs max-w-md text-center">
-            Embed{" "}
-            <code className="text-slate-400">&lt;AiThinkingStrip /&gt;</code> in
-            your dashboard header. Run{" "}
-            <code className="text-slate-400">npm install && npm run dev</code>{" "}
-            from <code className="text-slate-400">dashboard/</code>.
-          </p>
-        </>
+              <p className="text-slate-600 text-xs max-w-md text-center">
+                Embed{" "}
+                <code className="text-slate-400">&lt;AiThinkingStrip /&gt;</code>{" "}
+                in your dashboard header.
+              </p>
+            </>
+          )}
+        </div>
       )}
-    </div>
+    </>
   );
 }

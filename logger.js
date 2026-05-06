@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import crypto from "node:crypto";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -28,7 +28,7 @@ export function logSignal(signal, meta = {}) {
   const now = Date.now();
 
   const entry = {
-    id: randomUUID(),
+    id: crypto.randomUUID(),
     ...signal,
     ...meta,
     checkpoints: [
