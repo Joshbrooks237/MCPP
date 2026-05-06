@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { AiThinkingStrip } from "./components/AiThinkingStrip";
 import { PaperSim } from "./PaperSim";
 import { StockWeather } from "./StockWeather";
+import { TeamVsMarket } from "./TeamVsMarket";
 
 type DemoPattern = "manual" | "all" | "solo" | "random";
-type AppView = "weather" | "paper" | "ai-demo";
+type AppView = "weather" | "team" | "paper" | "ai-demo";
 
 export default function App() {
   const [view, setView] = useState<AppView>("weather");
@@ -75,6 +76,17 @@ export default function App() {
         </button>
         <button
           type="button"
+          onClick={() => setView("team")}
+          className={`rounded-lg px-3 py-1.5 text-xs font-semibold shadow-md ${
+            view === "team"
+              ? "bg-cyan-600 text-white"
+              : "bg-white/90 text-slate-700 border border-slate-200"
+          }`}
+        >
+          Team vs market
+        </button>
+        <button
+          type="button"
           onClick={() => setView("paper")}
           className={`rounded-lg px-3 py-1.5 text-xs font-semibold shadow-md ${
             view === "paper"
@@ -103,7 +115,9 @@ export default function App() {
         <div className="min-h-screen flex flex-col items-center justify-start gap-6 p-6 pt-12 bg-slate-950">
           <div className="h-8 shrink-0" aria-hidden />
 
-          {view === "paper" ? (
+          {view === "team" ? (
+            <TeamVsMarket />
+          ) : view === "paper" ? (
             <PaperSim />
           ) : (
             <>

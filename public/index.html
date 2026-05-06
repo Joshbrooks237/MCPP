@@ -281,6 +281,21 @@
 
     const AUTO_REFRESH_MS = 30 * 1000;
 
+    async function parseJsonResponse(res) {
+      const text = await res.text();
+      const trimmed = text.trim();
+      if (!trimmed) {
+        throw new Error(
+          "Empty response — start the server (npm start) and try again."
+        );
+      }
+      try {
+        return JSON.parse(trimmed);
+      } catch {
+        throw new Error("Server returned invalid JSON (HTML or truncated body).");
+      }
+    }
+
     async function loadSignals(options = {}) {
       const silent = options.silent === true;
       if (!silent) {
@@ -292,7 +307,7 @@
       try {
         const res = await fetch("/signals");
         if (!res.ok) throw new Error("Bad response");
-        const data = await res.json();
+        const data = await parseJsonResponse(res);
         render(data);
         statusEl.textContent = silent
           ? "Updated! Next auto-update in 30 seconds. Or tap Refresh anytime."
@@ -437,10 +452,13 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ forceAi: true }),
         });
-        const data = await res.json();
+        const data = await parseJsonResponse(res);
         box.innerHTML = renderAnalyzePlain(data);
       } catch (e) {
-        box.innerHTML = "<p>Oops, robots didn't answer.</p>";
+        box.innerHTML =
+          "<p>Oops — " +
+          escapeHtml(shortErr(String(e?.message ?? e))) +
+          "</p>";
       }
     });
 

@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { AiThinkingStrip } from "./components/AiThinkingStrip";
 import { CouncilVoteLights, type VoteKind } from "./components/CouncilVoteLights";
+import { parseJsonResponse } from "./parseJsonResponse";
 
 const API = "/stock-weather";
+
+const COUNCIL_BOOT_SESSION_KEY = "mcpp_council_boot_v1";
 
 type Card = {
   ticker?: string;
@@ -19,8 +22,11 @@ type Card = {
 type Council = {
   votes?: Record<string, VoteKind>;
   errors?: Record<string, string>;
-  consensus?: VoteKind;
+  consensus?: VoteKind | string | null;
   counts?: Record<string, number>;
+  participated?: number;
+  quorumMet?: boolean;
+  tieBreak?: boolean;
   error?: string;
 };
 
@@ -45,9 +51,13 @@ type SWState = {
   decisionLog: Array<{
     timestamp: number;
     asset: string;
-    consensus: string;
+    consensus: string | null;
     breakdown: Record<string, number>;
     votes: Record<string, string>;
+    price?: number | null;
+    participated?: number;
+    quorumMet?: boolean;
+    tieBreak?: boolean;
   }>;
   paperPositions: Array<{
     id: string;
@@ -90,7 +100,9 @@ export function StockWeather() {
   const load = useCallback(async () => {
     try {
       const res = await fetch(`${API}/state`);
-      const j = await res.json();
+      const j = (await parseJsonResponse(res)) as {
+        error?: unknown;
+      };
       if (!res.ok) {
         const msg =
           typeof j?.error === "object" && j?.error?.message
@@ -100,7 +112,7 @@ export function StockWeather() {
               : res.statusText;
         throw new Error(msg);
       }
-      setData(j);
+      setData(j as SWState);
       setErr(null);
     } catch (e) {
       setErr(String((e as Error).message ?? e));
@@ -113,15 +125,38 @@ export function StockWeather() {
     return () => clearInterval(id);
   }, [load]);
 
-  const triggerPoll = async () => {
+  const triggerPoll = useCallback(async () => {
     setErr(null);
     try {
-      await fetch(`${API}/poll`, { method: "POST" });
+      const pollRes = await fetch(`${API}/poll`, { method: "POST" });
+      const pj = (await parseJsonResponse(pollRes)) as {
+        error?: unknown;
+      };
+      if (!pollRes.ok) {
+        const msg =
+          typeof pj?.error === "object" && pj?.error?.message
+            ? String(pj.error.message)
+            : typeof pj?.error === "string"
+              ? pj.error
+              : pollRes.statusText;
+        throw new Error(msg);
+      }
       await load();
     } catch (e) {
       setErr(String((e as Error).message ?? e));
     }
-  };
+  }, [load]);
+
+  const pollBusy = data?.pollInProgress ?? false;
+
+  useEffect(() => {
+    if (typeof sessionStorage === "undefined" || !data) return;
+    if (data.lastPollAt != null) return;
+    if (pollBusy) return;
+    if (sessionStorage.getItem(COUNCIL_BOOT_SESSION_KEY)) return;
+    sessionStorage.setItem(COUNCIL_BOOT_SESSION_KEY, "1");
+    void triggerPoll();
+  }, [data, pollBusy, triggerPoll]);
 
   const runStudy = async (ticker: string) => {
     setStudyLoading(ticker);
@@ -132,7 +167,9 @@ export function StockWeather() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticker }),
       });
-      const j = await res.json();
+      const j = (await parseJsonResponse(res)) as {
+        error?: unknown;
+      };
       if (!res.ok) {
         const msg =
           typeof j?.error === "object" && j?.error?.message
@@ -160,7 +197,9 @@ export function StockWeather() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticker, usd: 50 }),
       });
-      const j = await res.json();
+      const j = (await parseJsonResponse(res)) as {
+        error?: unknown;
+      };
       if (!res.ok) {
         const msg =
           typeof j?.error === "object" && j?.error?.message
@@ -178,8 +217,6 @@ export function StockWeather() {
     }
   };
 
-  const pollBusy = data?.pollInProgress ?? false;
-
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-sky-100 via-rose-50 to-amber-50 font-[Fredoka,system-ui,sans-serif] pb-16 px-4 pt-8">
       <header className="max-w-6xl mx-auto text-center mb-8">
@@ -188,6 +225,12 @@ export function StockWeather() {
         </h1>
         <p className="text-lg text-slate-600 mt-1 font-medium">
           + Crypto Council
+        </p>
+        <p className="text-sm text-slate-500 mt-2 max-w-xl mx-auto leading-snug">
+          Blended BUY/HOLD/SELL refreshes on the server timer (~
+          {(data?.pollIntervalMs ?? 90000) / 1000}s). Open{" "}
+          <strong className="text-slate-600">Team vs market</strong> to compare every
+          symbol&apos;s tape and verdict side by side for tuning.
         </p>
         <div className="flex flex-wrap justify-center gap-3 mt-4 items-center">
           <button
@@ -332,7 +375,7 @@ export function StockWeather() {
 
       <section className="max-w-6xl mx-auto space-y-8">
         <h2 className="text-xl font-bold text-slate-800 text-center">
-          Council vote panel
+          Council blend panel
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {(data?.assets ?? []).map(({ meta, council }) => (
@@ -371,15 +414,47 @@ export function StockWeather() {
                       ? "text-green-600"
                       : row.consensus === "SELL"
                         ? "text-red-600"
-                        : "text-amber-600"
+                        : row.consensus === "HOLD"
+                          ? "text-amber-600"
+                          : "text-slate-400"
                   }`}
                 >
-                  {row.consensus}
+                  {row.consensus ?? "—"}
                 </span>
-                <span className="text-slate-500">
-                  BUY {row.breakdown?.BUY ?? 0} · HOLD {row.breakdown?.HOLD ?? 0}{" "}
-                  · SELL {row.breakdown?.SELL ?? 0}
-                </span>
+                {row.quorumMet === false ? (
+                  <span className="text-[10px] font-semibold text-amber-700 uppercase tracking-wide">
+                    standby
+                  </span>
+                ) : null}
+                {row.tieBreak ? (
+                  <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                    tie resolved
+                  </span>
+                ) : null}
+                <details className="inline">
+                  <summary className="cursor-pointer text-slate-400 hover:text-slate-600 text-[11px] font-medium ml-1 select-none">
+                    model split
+                  </summary>
+                  <span className="block text-slate-500 text-[11px] mt-1 pl-0">
+                    {row.quorumMet === false ? (
+                      <span className="block text-amber-800 mb-1">
+                        No valid votes — outcome was HOLD by committee standby rule.
+                      </span>
+                    ) : null}
+                    {row.tieBreak ? (
+                      <span className="block text-slate-600 mb-1">
+                        Models tied on counts — BUY vs SELL deadlock → HOLD; other ties use HOLD-first ordering.
+                      </span>
+                    ) : null}
+                    {typeof row.participated === "number" ? (
+                      <span className="block text-slate-600 mb-1">
+                        Valid votes counted: {row.participated}
+                      </span>
+                    ) : null}
+                    BUY {row.breakdown?.BUY ?? 0} · HOLD {row.breakdown?.HOLD ?? 0}{" "}
+                    · SELL {row.breakdown?.SELL ?? 0}
+                  </span>
+                </details>
               </li>
             ))}
             {!data?.decisionLog?.length && (

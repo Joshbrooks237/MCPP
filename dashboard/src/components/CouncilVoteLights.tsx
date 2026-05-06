@@ -4,7 +4,7 @@ export type VoteKind = "BUY" | "SELL" | "HOLD";
 
 type BulbState = "busy" | VoteKind | "err" | "idle";
 
-const MODELS = [
+export const COUNCIL_MODELS = [
   { key: "claude", label: "Claude" },
   { key: "gpt", label: "GPT" },
   { key: "grok", label: "Grok" },
@@ -89,10 +89,13 @@ function Bulb({
 }
 
 export type CouncilSlice = {
-  votes?: Partial<Record<(typeof MODELS)[number]["key"], VoteKind>>;
-  errors?: Partial<Record<(typeof MODELS)[number]["key"], string>>;
-  consensus?: VoteKind | string;
+  votes?: Partial<Record<(typeof COUNCIL_MODELS)[number]["key"], VoteKind>>;
+  errors?: Partial<Record<(typeof COUNCIL_MODELS)[number]["key"], string>>;
+  consensus?: VoteKind | string | null;
   counts?: Record<string, number>;
+  participated?: number;
+  quorumMet?: boolean;
+  tieBreak?: boolean;
   error?: string;
 };
 
@@ -114,25 +117,59 @@ export function CouncilVoteLights({
   const votes = council?.votes ?? {};
   const errs = council?.errors ?? {};
 
+  const ck = council?.consensus;
+  const consensusKind: VoteKind | null =
+    ck === "BUY" || ck === "SELL" || ck === "HOLD" ? ck : null;
+
+  const participated = council?.participated;
+  const quorumMet = council?.quorumMet !== false;
+  const tieBreak = council?.tieBreak === true;
+
+  const quorumNote =
+    typeof participated === "number"
+      ? `${participated} working ${participated === 1 ? "model" : "models"} in this blend`
+      : null;
+
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap justify-center gap-4 py-2 px-3 rounded-2xl bg-white/70 border border-white/90 shadow-inner">
-        {MODELS.map(({ key, label }) => {
-          let state: BulbState = "idle";
-          if (pollBusy) state = "busy";
-          else if (errs[key as keyof typeof errs]) state = "err";
-          else if (votes[key as keyof typeof votes])
-            state = votes[key as keyof typeof votes] as BulbState;
-          return (
-            <Bulb
-              key={key}
-              label={label}
-              state={state}
-              errHint={errs[key as keyof typeof errs]}
-            />
-          );
-        })}
-      </div>
+    <div className="flex flex-col gap-3">
+      {pollBusy ? (
+        <div className="text-center py-5 text-sm font-semibold text-amber-700 animate-pulse">
+          Blending council…
+        </div>
+      ) : consensusKind ? (
+        <div className="flex flex-col items-center gap-2 py-5 px-4 rounded-2xl bg-white border-2 border-slate-100 shadow-md">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+            Council outcome
+          </span>
+          <span
+            className="text-3xl font-black tracking-tight px-6 py-2 rounded-xl text-white shadow-lg"
+            style={{ backgroundColor: voteColor(consensusKind) }}
+          >
+            {consensusKind}
+          </span>
+          {!quorumMet ? (
+            <p className="text-[11px] text-amber-800 text-center max-w-[17rem] leading-snug bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+              Standby rule: no valid votes this poll — committee outcome fixed at HOLD until models respond.
+            </p>
+          ) : null}
+          {quorumMet && tieBreak ? (
+            <p className="text-[11px] text-slate-600 text-center max-w-[17rem] leading-snug">
+              Models disagreed; plurality tie resolved so the team still publishes exactly one direction (pure BUY vs SELL ties → HOLD).
+            </p>
+          ) : null}
+          {quorumNote ? (
+            <p className="text-[11px] text-slate-500 tabular-nums">{quorumNote}</p>
+          ) : null}
+          <p className="text-[11px] text-slate-500 text-center max-w-[16rem] leading-snug">
+            One merged verdict every poll — valid replies only; failed or unclear models are excluded from the tally.
+          </p>
+        </div>
+      ) : (
+        <p className="text-center text-sm text-slate-500 py-3">
+          No outcome yet — run the council.
+        </p>
+      )}
+
       {Object.keys(errs).length > 0 && !pollBusy && (
         <div className="rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-2 text-left">
           <p className="text-[10px] font-bold uppercase tracking-wide text-amber-900 mb-1">
@@ -148,32 +185,38 @@ export function CouncilVoteLights({
           </ul>
         </div>
       )}
-      {council?.consensus && !pollBusy && (
-        <div className="flex items-center justify-center gap-3 flex-wrap">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-            Consensus
-          </span>
-          <span
-            className="text-sm font-bold px-3 py-1 rounded-full text-white shadow-sm"
-            style={{
-              backgroundColor: voteColor(String(council.consensus) as VoteKind),
-            }}
-          >
-            {String(council.consensus)}
-          </span>
-          {council.counts && (
-            <span className="text-xs text-slate-600 tabular-nums">
-              {(
-                (council.counts.BUY ?? 0) +
-                (council.counts.HOLD ?? 0) +
-                (council.counts.SELL ?? 0)
-              )}
-              /5 · BUY {council.counts.BUY ?? 0} · HOLD{" "}
+
+      <details className="rounded-xl border border-slate-200 bg-slate-50/90 overflow-hidden">
+        <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-slate-600 hover:bg-slate-100/80 list-none flex items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+          <span>Individual model votes</span>
+          <span className="text-[10px] font-normal text-slate-400">optional</span>
+        </summary>
+        <div className="px-3 pb-4 pt-0 flex flex-col gap-3 border-t border-slate-200/80">
+          <div className="flex flex-wrap justify-center gap-4 py-3 px-2 rounded-xl bg-white/80 border border-white shadow-inner">
+            {COUNCIL_MODELS.map(({ key, label }) => {
+              let state: BulbState = "idle";
+              if (pollBusy) state = "busy";
+              else if (errs[key as keyof typeof errs]) state = "err";
+              else if (votes[key as keyof typeof votes])
+                state = votes[key as keyof typeof votes] as BulbState;
+              return (
+                <Bulb
+                  key={key}
+                  label={label}
+                  state={state}
+                  errHint={errs[key as keyof typeof errs]}
+                />
+              );
+            })}
+          </div>
+          {council?.counts && !pollBusy ? (
+            <p className="text-[11px] text-slate-600 tabular-nums text-center px-2">
+              Tallies · BUY {council.counts.BUY ?? 0} · HOLD{" "}
               {council.counts.HOLD ?? 0} · SELL {council.counts.SELL ?? 0}
-            </span>
-          )}
+            </p>
+          ) : null}
         </div>
-      )}
+      </details>
     </div>
   );
 }

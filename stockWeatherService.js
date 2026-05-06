@@ -66,11 +66,46 @@ function consensusFromVotes(voteMap) {
   for (const v of Object.values(voteMap)) {
     if (v === "BUY" || v === "SELL" || v === "HOLD") counts[v] += 1;
   }
-  const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  const top = ranked[0][1];
-  const tied = ranked.filter(([, n]) => n === top).map(([k]) => k);
-  if (tied.length > 1) return { consensus: "HOLD", counts };
-  return { consensus: ranked[0][0], counts };
+  const participated = counts.BUY + counts.HOLD + counts.SELL;
+
+  /** Committee always emits exactly one of BUY / HOLD / SELL for downstream graphs & trades. */
+  if (participated === 0) {
+    return {
+      consensus: "HOLD",
+      counts,
+      participated: 0,
+      quorumMet: false,
+      tieBreak: false,
+    };
+  }
+
+  const max = Math.max(counts.BUY, counts.HOLD, counts.SELL);
+  const tiedTop = Object.entries(counts)
+    .filter(([, n]) => n === max)
+    .map(([k]) => k);
+
+  let consensus;
+  let tieBreak = false;
+  if (tiedTop.length === 1) {
+    consensus = tiedTop[0];
+  } else {
+    tieBreak = true;
+    const set = new Set(tiedTop);
+    if (set.size === 2 && set.has("BUY") && set.has("SELL")) {
+      consensus = "HOLD";
+    } else {
+      const prio = { HOLD: 0, BUY: 1, SELL: 2 };
+      consensus = [...tiedTop].sort((a, b) => prio[a] - prio[b])[0];
+    }
+  }
+
+  return {
+    consensus,
+    counts,
+    participated,
+    quorumMet: true,
+    tieBreak,
+  };
 }
 
 async function refreshCryptoGlobals() {
@@ -221,7 +256,13 @@ export async function runCouncilCycle() {
           });
 
           const { votes, errors } = await runVotesForPayload(payload);
-          const { consensus, counts } = consensusFromVotes(votes);
+          const {
+            consensus,
+            counts,
+            participated,
+            quorumMet,
+            tieBreak,
+          } = consensusFromVotes(votes);
 
           snapshots[ticker] = { ...payload.FULL };
 
@@ -234,6 +275,9 @@ export async function runCouncilCycle() {
               errors,
               consensus,
               counts,
+              participated,
+              quorumMet,
+              tieBreak,
               updatedAt: stamp,
             },
             headlines,
@@ -245,6 +289,13 @@ export async function runCouncilCycle() {
             consensus,
             breakdown: { ...counts },
             votes: { ...votes },
+            participated,
+            quorumMet,
+            tieBreak,
+            price:
+              typeof card?.price === "number" && Number.isFinite(card.price)
+                ? card.price
+                : null,
           };
         } catch (e) {
           assetState[ticker] = {
@@ -308,6 +359,52 @@ export function getStockWeatherState() {
     decisionLog,
     paperPositions,
     studyCache: { ...studyCache },
+  };
+}
+
+/** Yahoo intraday series for Stock Weather tickers (real tape under council overlay). */
+export async function getStockWeatherIntraday(tickerSymbol) {
+  const t = String(tickerSymbol ?? "").toUpperCase();
+  const meta = STOCK_WEATHER_ASSETS.find((a) => a.ticker === t);
+  if (!meta) throw new Error("Unknown ticker");
+
+  const interval = meta.kind === "crypto" ? "30m" : "30m";
+  const range = meta.kind === "crypto" ? "10d" : "10d";
+
+  const result = await withRetry(
+    async () =>
+      yahoo.chart(meta.feed, { interval, range }, { validateOptions: false }),
+    2,
+    900,
+    `Yahoo intraday ${t}`,
+  );
+
+  const q = result.quotes || [];
+  /** @type {Array<{ t: number; o: number; h: number; l: number; c: number; v: number | null }>} */
+  const candles = [];
+  for (const x of q) {
+    const d = x.date;
+    const ts =
+      d instanceof Date ? d.getTime() : new Date(d).getTime();
+    const c = Number(x.close);
+    if (!Number.isFinite(ts) || !Number.isFinite(c)) continue;
+    candles.push({
+      t: ts,
+      o: Number(x.open),
+      h: Number(x.high),
+      l: Number(x.low),
+      c,
+      v: x.volume != null ? Number(x.volume) : null,
+    });
+  }
+
+  return {
+    ticker: t,
+    feed: meta.feed,
+    kind: meta.kind,
+    interval,
+    range,
+    candles,
   };
 }
 

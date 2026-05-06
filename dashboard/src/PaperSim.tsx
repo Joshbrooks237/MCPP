@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { parseJsonResponse } from "./parseJsonResponse";
+import {
+  PaperPortfolioCouncilChart,
+  type PaperHistRow,
+} from "./components/PaperPortfolioCouncilChart";
+
 const API = "/paper-sim";
 const PRESET_STORAGE_KEY = "mcpp-paper-sim-preset-v1";
 
@@ -68,6 +74,13 @@ function formatUsd(n: number | undefined) {
   }).format(n);
 }
 
+function paperCouncilScore(action: string | undefined): number {
+  const u = String(action ?? "").toUpperCase();
+  if (u === "BUY") return 1;
+  if (u === "SELL") return -1;
+  return 0;
+}
+
 type TickPayload = {
   market: PaperMarket;
   assetOrder: string[];
@@ -97,6 +110,7 @@ export function PaperSim() {
   const [tickData, setTickData] = useState<TickPayload | null>(null);
   const [loadingTick, setLoadingTick] = useState(false);
   const [cashTickUp, setCashTickUp] = useState(false);
+  const [sessionHist, setSessionHist] = useState<PaperHistRow[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevTotalRef = useRef<number | null>(null);
 
@@ -121,10 +135,23 @@ export function PaperSim() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ forceAi: true }),
       });
-      const j = await res.json();
+      const j = (await parseJsonResponse(res)) as { error?: unknown };
       if (!res.ok)
         throw new Error(apiErrorMessage(j, res.statusText));
-      setTickData(j);
+      const tick = j as TickPayload;
+      setTickData(tick);
+      setSessionHist((prev) =>
+        [
+          ...prev,
+          {
+            ts: Date.now(),
+            totalValue: tick.portfolio.totalValue,
+            score: paperCouncilScore(tick.decision?.action),
+            consensus: String(tick.decision?.action ?? "HOLD"),
+            evaluated: String(tick.symbolEvaluated ?? ""),
+          },
+        ].slice(-120),
+      );
     } catch (e) {
       setError(String((e as Error).message ?? e));
     } finally {
@@ -146,7 +173,7 @@ export function PaperSim() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amount: n, market }),
       });
-      const j = await res.json();
+      const j = (await parseJsonResponse(res)) as { error?: unknown };
       if (!res.ok)
         throw new Error(apiErrorMessage(j, res.statusText));
       setStarted(true);
@@ -155,6 +182,7 @@ export function PaperSim() {
         amount: amountInput,
         market,
       });
+      setSessionHist([]);
       setTickData(null);
       resetCashTracking();
       await runTick();
@@ -333,6 +361,7 @@ export function PaperSim() {
             onClick={() => {
               stopLoop();
               resetCashTracking();
+              setSessionHist([]);
               setStarted(false);
               setTickData(null);
             }}
@@ -390,6 +419,8 @@ export function PaperSim() {
           </span>
         </p>
       </div>
+
+      <PaperPortfolioCouncilChart rows={sessionHist} />
 
       <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-4 space-y-2">
         <h3 className="text-emerald-400 text-sm font-medium">Portfolio</h3>

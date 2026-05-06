@@ -2,6 +2,20 @@ import { withRetry } from "./yahooRetry.js";
 
 const CG_BASE = "https://api.coingecko.com/api/v3";
 
+/** @param {Response} res */
+async function jsonFromResponse(res, label) {
+  const t = await res.text();
+  const s = t.trim();
+  if (!s) throw new Error(`${label}: empty body (${res.status})`);
+  try {
+    return JSON.parse(s);
+  } catch {
+    throw new Error(
+      `${label}: invalid JSON (${res.status}): ${s.slice(0, 140)}${s.length > 140 ? "…" : ""}`,
+    );
+  }
+}
+
 function cgHeaders() {
   const key = process.env.COINGECKO_API_KEY?.trim();
   if (!key) return {};
@@ -21,7 +35,7 @@ export async function coingeckoSimpleUsd(ids) {
       const t = await res.text();
       throw new Error(`CoinGecko ${res.status}: ${t}`);
     }
-    return res.json();
+    return jsonFromResponse(res, "CoinGecko simple");
   }, 2, 700, "CoinGecko simple");
 
   return json && typeof json === "object" ? json : {};
@@ -32,7 +46,7 @@ export async function fetchFearGreedIndex() {
   const json = await withRetry(async () => {
     const res = await fetch("https://api.alternative.me/fng/?limit=1");
     if (!res.ok) throw new Error(`F&G ${res.status}`);
-    return res.json();
+    return jsonFromResponse(res, "alternative.me F&G");
   }, 2, 500, "alternative.me F&G");
 
   const row = json?.data?.[0];
@@ -49,7 +63,7 @@ export async function fetchBtcDominance() {
   const json = await withRetry(async () => {
     const res = await fetch(`${CG_BASE}/global`, { headers: { ...cgHeaders() } });
     if (!res.ok) throw new Error(`CoinGecko global ${res.status}`);
-    return res.json();
+    return jsonFromResponse(res, "CoinGecko global");
   }, 2, 700, "CoinGecko global");
 
   const pct = json?.data?.market_cap_percentage?.btc;

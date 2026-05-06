@@ -26,6 +26,7 @@ import {
   runHistoryStudy,
   paperTradeConsensus,
   startStockWeatherScheduler,
+  getStockWeatherIntraday,
 } from "./stockWeatherService.js";
 
 import path from "path";
@@ -127,6 +128,19 @@ app.get("/paper-sim/state", async (_req, res) => {
 app.get("/stock-weather/state", (_req, res) => {
   try {
     res.json(getStockWeatherState());
+  } catch (err) {
+    jsonFail(res, 500, err);
+  }
+});
+
+app.get("/stock-weather/intraday", async (req, res) => {
+  try {
+    const ticker = req.query?.ticker;
+    if (!ticker || String(ticker).trim() === "") {
+      throw new Error("ticker query required");
+    }
+    const out = await getStockWeatherIntraday(String(ticker));
+    res.json(out);
   } catch (err) {
     jsonFail(res, 500, err);
   }
@@ -330,6 +344,8 @@ app.listen(PORT, () => {
   console.log(`POST /signals/log`);
   console.log(`POST /analyze`);
   console.log(`GET  /predictions`);
+  console.log(`GET  /stock-weather/state`);
+  console.log(`GET  /stock-weather/intraday?ticker=`);
   console.log(`POST /stock-weather/poll`);
   console.log(`POST /stock-weather/study`);
   console.log(`POST /stock-weather/paper-trade`);

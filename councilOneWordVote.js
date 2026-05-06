@@ -3,16 +3,33 @@
  */
 
 export const COUNCIL_SYSTEM_PROMPT =
-  "You are a signal analyst studying asset momentum like ocean wave physics — velocity, acceleration, resistance. Given this data, respond with exactly one word: BUY, HOLD, or SELL.";
+  "You are one seat on a trading council: several models vote independently; their votes are merged into a single committee outcome (always BUY, HOLD, or SELL — ties or deadlocks resolve to a neutral rule). Study asset momentum like ocean wave physics — velocity, acceleration, resistance. Reply with exactly one word: BUY, HOLD, or SELL.";
 
-/** @param {string} text */
-export function parseCouncilVote(text) {
+/**
+ * @param {string} [text]
+ * @param {{ strict?: boolean }} [options] If strict, returns null when no BUY/HOLD/SELL (invalid votes must not count).
+ * @returns {"BUY"|"SELL"|"HOLD"|null}
+ */
+export function parseCouncilVote(text, options = {}) {
+  const strict = Boolean(options.strict);
   const raw = String(text ?? "").trim().toUpperCase();
   const fence = raw.match(/\b(BUY|SELL|HOLD)\b/);
-  if (fence) return fence[1];
+  if (fence) return /** @type {"BUY"|"SELL"|"HOLD"} */ (fence[1]);
   const first = raw.split(/[\s,.;:]+/).filter(Boolean)[0];
-  if (first === "BUY" || first === "SELL" || first === "HOLD") return first;
-  return "HOLD";
+  if (first === "BUY" || first === "SELL" || first === "HOLD")
+    return /** @type {"BUY"|"SELL"|"HOLD"} */ (first);
+  return strict ? null : "HOLD";
+}
+
+/** Council poll: reject replies that do not contain a valid vote word. */
+function requireCouncilVote(text, sourceLabel) {
+  const v = parseCouncilVote(text, { strict: true });
+  if (!v) {
+    throw new Error(
+      `${sourceLabel}: model reply missing BUY, HOLD, or SELL — excluded from blend`,
+    );
+  }
+  return v;
 }
 
 async function openAiCompatibleOneWord({
@@ -48,7 +65,7 @@ async function openAiCompatibleOneWord({
   }
   const json = await res.json();
   const content = json.choices?.[0]?.message?.content;
-  return parseCouncilVote(content);
+  return requireCouncilVote(content, "OpenAI-compatible");
 }
 
 export async function voteOpenAI(userPayload) {
@@ -102,7 +119,7 @@ export async function voteClaude(userPayload) {
   }
   const json = await res.json();
   const text = json.content?.find((b) => b.type === "text")?.text;
-  return parseCouncilVote(text);
+  return requireCouncilVote(text, "Anthropic");
 }
 
 export async function voteGrok(userPayload) {
@@ -151,7 +168,7 @@ export async function voteOllama(userPayload) {
   }
   const json = await res.json();
   const text = json.message?.content;
-  return parseCouncilVote(text);
+  return requireCouncilVote(text, "Ollama");
 }
 
 /** Deo: OpenAI-compatible chat (custom base URL). */
@@ -258,7 +275,7 @@ export async function voteGemini(userPayload) {
   if (!text && json.promptFeedback?.blockReason) {
     throw new Error(`Gemini blocked: ${json.promptFeedback.blockReason}`);
   }
-  return parseCouncilVote(text);
+  return requireCouncilVote(text, "Gemini");
 }
 
 /** Prefer Gemini when configured; otherwise OpenAI-compatible Deo slot. */
