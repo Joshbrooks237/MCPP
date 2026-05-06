@@ -169,6 +169,34 @@ export async function voteDeo(userPayload) {
   return openAiCompatibleOneWord({ url, apiKey, model, userPayload });
 }
 
+/** Default when GEMINI_MODEL / GOOGLE_GENERATIVE_AI_MODEL unset. */
+const GEMINI_GENERATE_DEFAULT = "gemini-2.5-flash";
+
+/**
+ * Gemini 1.5 bare IDs often 404 on v1beta generateContent; remap to current models.
+ * @param {string} rawModel
+ */
+function resolveGeminiGenerateModelId(rawModel) {
+  const trimmed = String(rawModel ?? "").trim();
+  const base = trimmed.startsWith("models/")
+    ? trimmed.slice("models/".length)
+    : trimmed;
+  const id = base === "" ? GEMINI_GENERATE_DEFAULT : base;
+  const aliases = {
+    "gemini-1.5-flash": GEMINI_GENERATE_DEFAULT,
+    "gemini-1.5-flash-latest": GEMINI_GENERATE_DEFAULT,
+    "gemini-1.5-flash-001": GEMINI_GENERATE_DEFAULT,
+    "gemini-1.5-flash-002": GEMINI_GENERATE_DEFAULT,
+    "gemini-1.5-pro": "gemini-2.5-pro",
+    "gemini-1.5-pro-latest": "gemini-2.5-pro",
+    "gemini-1.5-pro-001": "gemini-2.5-pro",
+    "gemini-1.5-pro-002": "gemini-2.5-pro",
+    "gemini-pro": GEMINI_GENERATE_DEFAULT,
+    "gemini-flash": GEMINI_GENERATE_DEFAULT,
+  };
+  return aliases[id] ?? id;
+}
+
 /** Google Gemini — fifth seat when GEMINI_* / GOOGLE_GENERATIVE_AI_* key is set. */
 export async function voteGemini(userPayload) {
   const apiKey =
@@ -180,12 +208,11 @@ export async function voteGemini(userPayload) {
     );
   }
 
-  const model =
+  const configured =
     process.env.GEMINI_MODEL?.trim() ||
     process.env.GOOGLE_GENERATIVE_AI_MODEL?.trim() ||
-    "gemini-2.0-flash";
-
-  const id = model.startsWith("models/") ? model.slice("models/".length) : model;
+    "";
+  const id = resolveGeminiGenerateModelId(configured);
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(id)}:generateContent`;
 
@@ -217,7 +244,11 @@ export async function voteGemini(userPayload) {
       res.status === 429
         ? " Quota/rate limit: confirm billing and limits at https://ai.google.dev/gemini-api/docs/rate-limits — or wait for retry-after and/or set GEMINI_MODEL to another allowed model."
         : "";
-    throw new Error(`Gemini ${res.status}: ${t}${hint429}`);
+    const hint404 =
+      res.status === 404
+        ? " Unknown or retired model id — use GEMINI_MODEL from https://ai.google.dev/gemini-api/docs/models or list: GET https://generativelanguage.googleapis.com/v1beta/models"
+        : "";
+    throw new Error(`Gemini ${res.status}: ${t}${hint429}${hint404}`);
   }
 
   const json = await res.json();
@@ -366,12 +397,11 @@ export async function expandedGemini(systemStr, userStr) {
     );
   }
 
-  const model =
+  const configured =
     process.env.GEMINI_MODEL?.trim() ||
     process.env.GOOGLE_GENERATIVE_AI_MODEL?.trim() ||
-    "gemini-2.0-flash";
-
-  const id = model.startsWith("models/") ? model.slice("models/".length) : model;
+    "";
+  const id = resolveGeminiGenerateModelId(configured);
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(id)}:generateContent`;
 
@@ -391,7 +421,14 @@ export async function expandedGemini(systemStr, userStr) {
     }),
   });
 
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    const t = await res.text();
+    const hint404 =
+      res.status === 404
+        ? " Unknown or retired GEMINI_MODEL — see https://ai.google.dev/gemini-api/docs/models"
+        : "";
+    throw new Error(`Gemini ${res.status}: ${t}${hint404}`);
+  }
   const json = await res.json();
   const cand = json.candidates?.[0];
   return String(
