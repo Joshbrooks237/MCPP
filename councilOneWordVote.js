@@ -122,7 +122,7 @@ export async function voteOllama(userPayload) {
     /\/$/,
     "",
   );
-  const model = process.env.OLLAMA_MODEL?.trim() || "llama3.2";
+  const model = process.env.OLLAMA_MODEL?.trim() || "llama3.2:latest";
   const res = await fetch(`${host}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -143,7 +143,11 @@ export async function voteOllama(userPayload) {
   });
   if (!res.ok) {
     const t = await res.text();
-    throw new Error(`Ollama ${res.status}: ${t}`);
+    const hint404 =
+      res.status === 404
+        ? " Run `ollama pull llama3.2` (or pull another tag) and set OLLAMA_MODEL to an exact name from `ollama list`."
+        : "";
+    throw new Error(`Ollama ${res.status}: ${t}${hint404}`);
   }
   const json = await res.json();
   const text = json.message?.content;
@@ -209,7 +213,11 @@ export async function voteGemini(userPayload) {
 
   if (!res.ok) {
     const t = await res.text();
-    throw new Error(`Gemini ${res.status}: ${t}`);
+    const hint429 =
+      res.status === 429
+        ? " Quota/rate limit: confirm billing and limits at https://ai.google.dev/gemini-api/docs/rate-limits — or wait for retry-after and/or set GEMINI_MODEL to another allowed model."
+        : "";
+    throw new Error(`Gemini ${res.status}: ${t}${hint429}`);
   }
 
   const json = await res.json();
@@ -329,7 +337,7 @@ export async function expandedOllama(systemStr, userStr) {
     /\/$/,
     "",
   );
-  const model = process.env.OLLAMA_MODEL?.trim() || "llama3.2";
+  const model = process.env.OLLAMA_MODEL?.trim() || "llama3.2:latest";
   const res = await fetch(`${host}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

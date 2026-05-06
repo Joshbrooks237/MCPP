@@ -1,6 +1,52 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const API = "/paper-sim";
+const PRESET_STORAGE_KEY = "mcpp-paper-sim-preset-v1";
+
+type PaperMarket = "equities" | "crypto";
+
+type SavedPaperPreset = {
+  portfolioName: string;
+  amount: string;
+  market: PaperMarket;
+};
+
+function loadPaperPreset(): SavedPaperPreset | null {
+  try {
+    const raw = localStorage.getItem(PRESET_STORAGE_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as Partial<SavedPaperPreset>;
+    if (typeof p.amount !== "string") return null;
+    const market =
+      p.market === "crypto" || p.market === "equities"
+        ? p.market
+        : "equities";
+    return {
+      portfolioName:
+        typeof p.portfolioName === "string" ? p.portfolioName : "",
+      amount: p.amount,
+      market,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function savePaperPreset(preset: SavedPaperPreset) {
+  try {
+    localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(preset));
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+function clearPaperPreset() {
+  try {
+    localStorage.removeItem(PRESET_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 function apiErrorMessage(j: { error?: unknown }, fallback: string): string {
   const e = j?.error;
@@ -22,8 +68,6 @@ function formatUsd(n: number | undefined) {
   }).format(n);
 }
 
-type PaperMarket = "equities" | "crypto";
-
 type TickPayload = {
   market: PaperMarket;
   assetOrder: string[];
@@ -44,8 +88,10 @@ type TickPayload = {
 };
 
 export function PaperSim() {
+  const [portfolioName, setPortfolioName] = useState("");
   const [amountInput, setAmountInput] = useState("200");
   const [market, setMarket] = useState<PaperMarket>("equities");
+  const [presetHydrated, setPresetHydrated] = useState(false);
   const [started, setStarted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tickData, setTickData] = useState<TickPayload | null>(null);
@@ -104,6 +150,11 @@ export function PaperSim() {
       if (!res.ok)
         throw new Error(apiErrorMessage(j, res.statusText));
       setStarted(true);
+      savePaperPreset({
+        portfolioName: portfolioName.trim(),
+        amount: amountInput,
+        market,
+      });
       setTickData(null);
       resetCashTracking();
       await runTick();
@@ -114,6 +165,28 @@ export function PaperSim() {
   };
 
   useEffect(() => () => stopLoop(), [stopLoop]);
+
+  useEffect(() => {
+    const preset = loadPaperPreset();
+    if (preset) {
+      setPortfolioName(preset.portfolioName);
+      setAmountInput(preset.amount);
+      setMarket(preset.market);
+    }
+    setPresetHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!presetHydrated) return;
+    const id = window.setTimeout(() => {
+      savePaperPreset({
+        portfolioName: portfolioName.trim(),
+        amount: amountInput,
+        market,
+      });
+    }, 400);
+    return () => clearTimeout(id);
+  }, [presetHydrated, portfolioName, amountInput, market]);
 
   useEffect(() => {
     const v = tickData?.portfolio?.totalValue;
@@ -133,6 +206,19 @@ export function PaperSim() {
     return (
       <div className="w-full max-w-md mx-auto rounded-xl border border-emerald-900/80 bg-slate-950 p-6 space-y-4">
         <h2 className="text-lg font-semibold text-emerald-100">Paper portfolio</h2>
+        <label className="block text-sm text-slate-400">
+          Saved name (optional)
+          <input
+            type="text"
+            placeholder="e.g. Demo run"
+            value={portfolioName}
+            onChange={(e) => setPortfolioName(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 placeholder:text-slate-600"
+          />
+        </label>
+        <p className="text-[11px] text-slate-600 leading-snug">
+          Name and starting balance are remembered on this browser.
+        </p>
         <label className="block text-sm text-slate-400">
           Starting balance ($)
           <input
@@ -186,6 +272,18 @@ export function PaperSim() {
         >
           Start portfolio
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            clearPaperPreset();
+            setPortfolioName("");
+            setAmountInput("200");
+            setMarket("equities");
+          }}
+          className="w-full text-xs text-slate-500 hover:text-slate-400 underline"
+        >
+          Clear saved preset
+        </button>
         <p className="text-xs text-slate-500">
           Backend on port 3000 (Vite proxies{" "}
           <code className="text-slate-400">/paper-sim</code>).
@@ -212,7 +310,14 @@ export function PaperSim() {
   return (
     <div className="w-full max-w-lg mx-auto space-y-4">
       <div className="flex justify-between items-center gap-2 flex-wrap">
-        <h2 className="text-lg font-semibold text-emerald-100">Live paper sim</h2>
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold text-emerald-100">Live paper sim</h2>
+          {portfolioName.trim() ? (
+            <p className="text-xs text-slate-500 truncate max-w-[14rem] sm:max-w-xs">
+              {portfolioName.trim()}
+            </p>
+          ) : null}
+        </div>
         <div className="flex items-center gap-2">
           <span
             className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded border ${
