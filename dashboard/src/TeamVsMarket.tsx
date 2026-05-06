@@ -352,6 +352,20 @@ export function TeamVsMarket() {
     [assets],
   );
 
+  /** Latest poll mapped to −1 / 0 / +1 for overlay on Tape vs council chart (omit ticker when no BUY/HOLD/SELL yet). */
+  const liveCouncilScoreByTicker = useMemo(() => {
+    const out: Record<string, number | null> = {};
+    for (const { meta, council } of assets) {
+      const cons = council?.consensus;
+      const raw =
+        cons === null || cons === undefined ? "" : String(cons).toUpperCase();
+      const vk: VoteKind | null =
+        raw === "BUY" || raw === "SELL" || raw === "HOLD" ? raw : null;
+      out[meta.ticker] = vk != null ? voteToScore(vk) : null;
+    }
+    return out;
+  }, [assets]);
+
   const rsiCouncilRows = useMemo(
     () =>
       assets
@@ -452,6 +466,7 @@ export function TeamVsMarket() {
         <CouncilTapeChart
           decisionLog={data?.decisionLog}
           tickers={assets.map((a) => a.meta.ticker)}
+          liveCouncilScoreByTicker={liveCouncilScoreByTicker}
         />
       </div>
 

@@ -4,6 +4,7 @@ import {
   ComposedChart,
   Legend,
   Line,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -53,6 +54,8 @@ const TICKER_LINE_COLORS: Record<string, string> = {
 };
 
 const COUNCIL_LINE_SOLID = "#fbbf24";
+/** Latest poll blend on the council axis (historical stepped line is amber). */
+const COUNCIL_LIVE_LINE = "#22c55e";
 /** Detail-mode Yahoo close line (left axis). */
 const TAPE_CLOSE_LINE = "#67e8f9";
 
@@ -110,9 +113,12 @@ function interpolateIndexed(
 export function CouncilTapeChart({
   decisionLog,
   tickers,
+  liveCouncilScoreByTicker,
 }: {
   decisionLog: TapeDecisionRow[] | undefined;
   tickers: string[];
+  /** Latest blended verdict per symbol (−1 / 0 / +1) from the live poll; omit when unknown. */
+  liveCouncilScoreByTicker?: Record<string, number | null> | undefined;
 }) {
   /** Default to universe comparison so you can tune the panel against every tape at once. */
   const [mode, setMode] = useState<ChartMode>("compare");
@@ -362,10 +368,18 @@ export function CouncilTapeChart({
           decisionsByTicker[tk] ?? [],
           t,
         );
+        const live = liveCouncilScoreByTicker?.[tk];
+        extended[`councilLive_${tk}`] =
+          typeof live === "number" && Number.isFinite(live) ? live : null;
       }
       return extended;
     });
-  }, [mergedIndexed, tickers, decisionsByTicker]);
+  }, [mergedIndexed, tickers, decisionsByTicker, liveCouncilScoreByTicker]);
+
+  const liveScoreDetail = useMemo(() => {
+    const v = liveCouncilScoreByTicker?.[selected];
+    return typeof v === "number" && Number.isFinite(v) ? v : null;
+  }, [liveCouncilScoreByTicker, selected]);
 
   if (!tickers.length) return null;
 
@@ -382,8 +396,8 @@ export function CouncilTapeChart({
           </h2>
           <p className="text-[11px] text-slate-500 mt-1 max-w-xl leading-relaxed">
             {mode === "detail"
-              ? `Yahoo closes (${tape?.interval ?? "—"} bars): cyan line = close price; dashed amber stepped line = blended council verdict through time (BUY / HOLD / SELL), not each model separately.`
-              : "Indexed real tape (solid) vs dashed blend per symbol on one clock — scan divergence to tune prompts, weights, or RSI gates across names."}
+              ? `Yahoo closes (${tape?.interval ?? "—"} bars): cyan = close; dashed amber = logged blend through time; green horizontal = latest poll blend (−1 · 0 · +1).`
+              : "Indexed tape (solid) vs dashed logged blend per symbol; green lines = latest poll blend per symbol."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
@@ -445,10 +459,17 @@ export function CouncilTapeChart({
             className="inline-block w-8 border-t-[3px] border-dashed border-amber-300"
             aria-hidden
           />
-          Council blend
+          Logged blend
+        </span>
+        <span className="flex items-center gap-2 text-green-400">
+          <span
+            className="inline-block w-8 border-t-[3px] border-green-500"
+            aria-hidden
+          />
+          Live blend (poll)
         </span>
         <span className="text-slate-600 normal-case font-normal tracking-normal lowercase">
-          (stepped: sell −1 · hold 0 · buy +1)
+          (sell −1 · hold 0 · buy +1)
         </span>
       </div>
 
@@ -551,7 +572,7 @@ export function CouncilTapeChart({
                       <p>L {row.l?.toFixed?.(4)} · C {row.c?.toFixed?.(4)}</p>
                       <hr className="my-2 border-slate-700" />
                       <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
-                        Council blend
+                        Logged blend (this bar)
                       </p>
                       <p className="text-amber-200 font-bold">
                         {labelConsensusScore(row.councilScore ?? null)}
@@ -559,6 +580,20 @@ export function CouncilTapeChart({
                           ({row.councilScore ?? "—"})
                         </span>
                       </p>
+                      {liveScoreDetail !== null ? (
+                        <>
+                          <hr className="my-2 border-slate-700" />
+                          <p className="text-[10px] uppercase tracking-wider text-green-500/90 mb-1">
+                            Live blend (latest poll)
+                          </p>
+                          <p className="text-green-400 font-bold">
+                            {labelConsensusScore(liveScoreDetail)}
+                            <span className="text-slate-500 font-normal ml-2 tabular-nums">
+                              ({liveScoreDetail})
+                            </span>
+                          </p>
+                        </>
+                      ) : null}
                     </div>
                   );
                 }}
@@ -578,7 +613,7 @@ export function CouncilTapeChart({
                 yAxisId="council"
                 type="stepAfter"
                 dataKey="councilScore"
-                name="Council blend"
+                name="Logged blend"
                 stroke={COUNCIL_LINE_SOLID}
                 strokeWidth={2.5}
                 strokeDasharray="6 4"
@@ -586,6 +621,16 @@ export function CouncilTapeChart({
                 connectNulls={false}
                 isAnimationActive={false}
               />
+              {liveScoreDetail !== null ? (
+                <ReferenceLine
+                  yAxisId="council"
+                  y={liveScoreDetail}
+                  stroke={COUNCIL_LIVE_LINE}
+                  strokeWidth={2.25}
+                  isFront
+                  ifOverflow="extendDomain"
+                />
+              ) : null}
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -703,7 +748,7 @@ export function CouncilTapeChart({
                   yAxisId="council"
                   type="stepAfter"
                   dataKey={`council_${tk}`}
-                  name={`${tk} blend`}
+                  name={`${tk} logged`}
                   stroke={TICKER_LINE_COLORS[tk] ?? "#94a3b8"}
                   strokeWidth={1.8}
                   strokeDasharray="6 4"
@@ -712,6 +757,25 @@ export function CouncilTapeChart({
                   isAnimationActive={false}
                 />
               ))}
+              {tickers.map((tk) => {
+                const ls = liveCouncilScoreByTicker?.[tk];
+                if (typeof ls !== "number" || !Number.isFinite(ls)) return null;
+                return (
+                  <Line
+                    key={`council-live-${tk}`}
+                    yAxisId="council"
+                    type="linear"
+                    dataKey={`councilLive_${tk}`}
+                    name={`${tk} live`}
+                    stroke={COUNCIL_LIVE_LINE}
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls
+                    isAnimationActive={false}
+                    hide
+                  />
+                );
+              })}
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -723,7 +787,7 @@ export function CouncilTapeChart({
         !tapeBusy &&
         !tapeErr && (
         <p className="text-[11px] text-slate-600 mt-2 text-center">
-          No blended council history in this window yet — run polls so consensus appears on the yellow line.
+          No blended council history in this window yet — run polls so the dashed amber line fills in.
         </p>
       )}
     </div>
