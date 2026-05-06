@@ -3,11 +3,17 @@ import { motion } from "framer-motion";
 const OPENAI = "#10a37f";
 const CLAUDE = "#d97706";
 const XAI = "#3b82f6";
+const OLLAMA = "#14b8a6";
+const DEO = "#a855f7";
 
 export type AiThinkingStripProps = {
   openaiActive: boolean;
   claudeActive: boolean;
   xaiActive: boolean;
+  /** Local / fifth council voter rows — default off for legacy demos. */
+  ollamaActive?: boolean;
+  /** Fifth seat (Gemini when GEMINI_API_KEY set, else OpenAI-compat Deo). */
+  deoActive?: boolean;
   /** Number of dots per row (clamped 6–8). Default 7. */
   dotCount?: number;
   className?: string;
@@ -70,6 +76,8 @@ export function AiThinkingStrip({
   openaiActive,
   claudeActive,
   xaiActive,
+  ollamaActive = false,
+  deoActive = false,
   dotCount = 7,
   className = "",
 }: AiThinkingStripProps) {
@@ -85,6 +93,8 @@ export function AiThinkingStrip({
       <DotRow label="OpenAI" color={OPENAI} active={openaiActive} dotCount={n} />
       <DotRow label="Claude" color={CLAUDE} active={claudeActive} dotCount={n} />
       <DotRow label="xAI / Grok" color={XAI} active={xaiActive} dotCount={n} />
+      <DotRow label="Ollama" color={OLLAMA} active={ollamaActive} dotCount={n} />
+      <DotRow label="Gemini" color={DEO} active={deoActive} dotCount={n} />
     </div>
   );
 }

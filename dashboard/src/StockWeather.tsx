@@ -208,7 +208,13 @@ export function StockWeather() {
 
       {pollBusy && (
         <div className="max-w-xl mx-auto mb-6 flex justify-center">
-          <AiThinkingStrip openaiActive claudeActive xaiActive />
+          <AiThinkingStrip
+            openaiActive={pollBusy}
+            claudeActive={pollBusy}
+            xaiActive={pollBusy}
+            ollamaActive={pollBusy}
+            deoActive={pollBusy}
+          />
         </div>
       )}
 

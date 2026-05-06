@@ -9,7 +9,7 @@ const MODELS = [
   { key: "gpt", label: "GPT" },
   { key: "grok", label: "Grok" },
   { key: "ollama", label: "Ollama" },
-  { key: "deo", label: "Deo" },
+  { key: "deo", label: "Gemini" },
 ] as const;
 
 function voteColor(v: VoteKind): string {
@@ -21,9 +21,12 @@ function voteColor(v: VoteKind): string {
 function Bulb({
   label,
   state,
+  errHint,
 }: {
   label: string;
   state: BulbState;
+  /** Shown on hover when state is err */
+  errHint?: string;
 }) {
   const busy = state === "busy";
   const err = state === "err";
@@ -47,7 +50,14 @@ function Bulb({
         {label}
       </span>
       <motion.span
-        className="rounded-full block"
+        title={
+          err && errHint
+            ? errHint
+            : err
+              ? "No vote — model error or not configured"
+              : undefined
+        }
+        className="rounded-full block cursor-default"
         style={{ width: 14, height: 14, backgroundColor: color }}
         animate={
           busy
@@ -113,9 +123,31 @@ export function CouncilVoteLights({
           else if (errs[key as keyof typeof errs]) state = "err";
           else if (votes[key as keyof typeof votes])
             state = votes[key as keyof typeof votes] as BulbState;
-          return <Bulb key={key} label={label} state={state} />;
+          return (
+            <Bulb
+              key={key}
+              label={label}
+              state={state}
+              errHint={errs[key as keyof typeof errs]}
+            />
+          );
         })}
       </div>
+      {Object.keys(errs).length > 0 && !pollBusy && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-2 text-left">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-amber-900 mb-1">
+            No vote from these models
+          </p>
+          <ul className="space-y-1 text-[11px] text-amber-950 leading-snug">
+            {Object.entries(errs).map(([k, msg]) => (
+              <li key={k}>
+                <span className="font-semibold capitalize">{k}:</span>{" "}
+                <span className="opacity-90">{msg}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {council?.consensus && !pollBusy && (
         <div className="flex items-center justify-center gap-3 flex-wrap">
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">

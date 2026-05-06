@@ -10,13 +10,13 @@ import {
   voteOpenAI,
   voteGrok,
   voteOllama,
-  voteDeo,
+  voteDeoOrGemini,
   STUDY_HISTORY_SYSTEM_PROMPT,
   expandedClaude,
   expandedOpenAI,
   expandedGrok,
   expandedOllama,
-  expandedDeo,
+  expandedDeoOrGemini,
 } from "./councilOneWordVote.js";
 import { alpacaPaperMarketNotional } from "./alpacaPaperOrders.js";
 import { yahoo } from "./yahooClient.js";
@@ -155,7 +155,7 @@ async function runVotesForPayload(payload) {
     ["gpt", () => voteOpenAI(payload)],
     ["grok", () => voteGrok(payload)],
     ["ollama", () => voteOllama(payload)],
-    ["deo", () => voteDeo(payload)],
+    ["deo", () => voteDeoOrGemini(payload)],
   ];
 
   const votes = {};
@@ -362,7 +362,7 @@ export async function runHistoryStudy(ticker) {
     ["gpt", () => expandedOpenAI(STUDY_HISTORY_SYSTEM_PROMPT, userText)],
     ["grok", () => expandedGrok(STUDY_HISTORY_SYSTEM_PROMPT, userText)],
     ["ollama", () => expandedOllama(STUDY_HISTORY_SYSTEM_PROMPT, userText)],
-    ["deo", () => expandedDeo(STUDY_HISTORY_SYSTEM_PROMPT, userText)],
+    ["deo", () => expandedDeoOrGemini(STUDY_HISTORY_SYSTEM_PROMPT, userText)],
   ];
 
   const answers = {};

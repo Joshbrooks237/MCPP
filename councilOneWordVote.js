@@ -165,6 +165,72 @@ export async function voteDeo(userPayload) {
   return openAiCompatibleOneWord({ url, apiKey, model, userPayload });
 }
 
+/** Google Gemini — fifth seat when GEMINI_* / GOOGLE_GENERATIVE_AI_* key is set. */
+export async function voteGemini(userPayload) {
+  const apiKey =
+    process.env.GEMINI_API_KEY?.trim() ||
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error(
+      "GEMINI_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY not set",
+    );
+  }
+
+  const model =
+    process.env.GEMINI_MODEL?.trim() ||
+    process.env.GOOGLE_GENERATIVE_AI_MODEL?.trim() ||
+    "gemini-2.0-flash";
+
+  const id = model.startsWith("models/") ? model.slice("models/".length) : model;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(id)}:generateContent`;
+
+  const userText =
+    "Market telemetry (JSON). Reply one word only: BUY, HOLD, or SELL.\n\n" +
+    JSON.stringify(userPayload);
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
+    },
+    body: JSON.stringify({
+      systemInstruction: {
+        parts: [{ text: COUNCIL_SYSTEM_PROMPT }],
+      },
+      contents: [{ role: "user", parts: [{ text: userText }] }],
+      generationConfig: {
+        temperature: 0,
+        maxOutputTokens: 16,
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Gemini ${res.status}: ${t}`);
+  }
+
+  const json = await res.json();
+  const cand = json.candidates?.[0];
+  const text =
+    cand?.content?.parts?.map((p) => p.text).filter(Boolean).join("") ?? "";
+  if (!text && json.promptFeedback?.blockReason) {
+    throw new Error(`Gemini blocked: ${json.promptFeedback.blockReason}`);
+  }
+  return parseCouncilVote(text);
+}
+
+/** Prefer Gemini when configured; otherwise OpenAI-compatible Deo slot. */
+export async function voteDeoOrGemini(userPayload) {
+  const hasGemini =
+    !!(process.env.GEMINI_API_KEY?.trim() ||
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim());
+  if (hasGemini) return voteGemini(userPayload);
+  return voteDeo(userPayload);
+}
+
 export const COUNCIL_MODEL_KEYS = [
   "claude",
   "gpt",
@@ -280,6 +346,57 @@ export async function expandedOllama(systemStr, userStr) {
   if (!res.ok) throw new Error(await res.text());
   const json = await res.json();
   return String(json.message?.content ?? "").trim();
+}
+
+export async function expandedGemini(systemStr, userStr) {
+  const apiKey =
+    process.env.GEMINI_API_KEY?.trim() ||
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error(
+      "GEMINI_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY not set",
+    );
+  }
+
+  const model =
+    process.env.GEMINI_MODEL?.trim() ||
+    process.env.GOOGLE_GENERATIVE_AI_MODEL?.trim() ||
+    "gemini-2.0-flash";
+
+  const id = model.startsWith("models/") ? model.slice("models/".length) : model;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(id)}:generateContent`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
+    },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: systemStr }] },
+      contents: [{ role: "user", parts: [{ text: userStr }] }],
+      generationConfig: {
+        temperature: 0.25,
+        maxOutputTokens: 1200,
+      },
+    }),
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  const json = await res.json();
+  const cand = json.candidates?.[0];
+  return String(
+    cand?.content?.parts?.map((p) => p.text).filter(Boolean).join("") ?? "",
+  ).trim();
+}
+
+export async function expandedDeoOrGemini(systemStr, userStr) {
+  const hasGemini =
+    !!(process.env.GEMINI_API_KEY?.trim() ||
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim());
+  if (hasGemini) return expandedGemini(systemStr, userStr);
+  return expandedDeo(systemStr, userStr);
 }
 
 export async function expandedDeo(systemStr, userStr) {
